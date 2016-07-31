@@ -1,3 +1,4 @@
+{-# LANGUAGE DoAndIfThenElse #-}
 module HLearn.Classifiers.Linear
     where
 
@@ -26,6 +27,20 @@ data GLM x y = GLM
 deriving instance (Show x, Show y, Show (Scalar x)) => Show (GLM x y)
 
 type instance Scalar (GLM x y) = Scalar x
+
+
+-- | The data type to represent a SVM is similar to the GLM - but in an SVM the weights of the model are just a linear
+-- combination of some vectors (the so-called support-vectors).
+-- \sum_i \alpha_i = 1; w = \sum_i \alpha_i x_i
+
+data SVM x = SVM
+    { alphas :: IntMap' (Scalar x,x, Bool)
+    , numa :: Int
+    }
+
+deriving instance (Show x, Show (Scalar x)) => Show (SVM x)
+
+type instance Scalar (SVM x) = Scalar x
 
 --------------------------------------------------------------------------------
 
@@ -58,7 +73,7 @@ trainLogisticRegression lambda xs = trainGLM_
         (lineSearch_brent (stop_brent 1e-6 || maxIterations 50 || noProgress || fx1grows))
 --         (backtracking (strongCurvature 1e-10))
 --         (backtracking fx1grows)
-        (mulTolerance 1e-9 || maxIterations 50 || noProgress {-- || fx1grows-})
+        (mulTolerance 1e-9 || maxIterations 50 || noProgress {- || fx1grows-})
     )
     loss_logistic
     lambda
@@ -101,6 +116,44 @@ trainGLM_ optmethod loss lambda xs = do
                 f  w = (           g $ w) + lambda*size w
                 f' w = (derivative g $ w) + lambda*.w
 
+--------------------------------------------------------------------------------
+
+{-# INLINEABLE trainSVM_ #-}
+trainSVM_ :: forall xys x y cxt.
+        ( Hilbert x
+        , Bounded (Scalar x)
+        , Show (Scalar x)
+        ) => (x -> x -> Scalar x)                               -- ^ Kernel
+        -> Scalar x                                             -- ^ C-Parameter
+        -> Scalar x                                             -- ^ Convergence-difference
+        -> Scalar x                                             -- ^ Learning rate
+        -> [Labeled' x Bool]                                    -- ^ Dataset with 2 classes
+        -> History cxt (SVM x)
+trainSVM_ k c crit eta xs = do
+        let init_alphas = fromIxList $ L.zip [0..] $ (\(Labeled' x y) -> (zero,x,y)) P.<$> xs :: IntMap' (Scalar x, x, Bool)
+        alphas' <- untilConvergence crit eta init_alphas
+        return $ SVM
+            { alphas = alphas'
+            , numa = length alphas'
+            }
+        where
+                -- summed squared error
+                sse :: Bounded (Scalar x) => IntMap' (Scalar x,x,Bool) -> Scalar x
+                sse al = sum $ imap (\_ (Labeled' xj yj) -> pointError xj yj) xs
+                        where
+                                pointError :: Hilbert x => x -> Bool -> Scalar x
+                                pointError xj yj = (\x -> x * x) $ sum $ values $ imap (\_ (ai,xi,_) -> ai * (k xi xj) * bool2num yj) al
+                untilConvergence  crit eta al = untilConvergence' crit eta al maxBound
+                untilConvergence' crit eta al err = beginFunction ("trainSVM("++show err++")") $ do
+                        let al' = imap (opt al) al
+                            err' = sse al'
+                        if err - err' < crit then
+                          return al'
+                        else
+                          untilConvergence' crit eta al' err'
+                opt al _ (ai,xi,yi) = (min c $ max zero $ ai + eta * (one - bool2num yi * (sum $ (\(aj,xj,yj) -> aj * bool2num yj * k xj xi) P.<$> values al)), xi, yi)
+
+
 
 --------------------------------------------------------------------------------
 -- loss functions
@@ -118,7 +171,7 @@ validate ::
     , Hilbert x
     , cat <: (->)
     ) => (y -> Labeled' x y -> (x `cat` Scalar x)) -> [Labeled' x y] -> GLM x y -> Scalar x
-validate loss xs model@(GLM ws _) = (sum $ map go xs) -- /(fromIntegral $ length xs)
+validate loss xs model@(GLM ws _) = sum $ map go xs -- /(fromIntegral $ length xs)
     where
         go xy@(Labeled' x y) = loss y' xy $ ws!y'
             where
