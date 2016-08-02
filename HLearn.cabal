@@ -187,7 +187,7 @@ executable hlearn-allknn
 
 --         -prof -osuf p_o -hisuf p_hi
 
-        -fllvm
+--        -fllvm
         -optlo-O3
         -optlo-enable-fp-mad
         -optlo-enable-no-infs-fp-math
@@ -216,3 +216,44 @@ executable hlearn-allknn
 
         cmdargs,
         MonadRandom
+
+
+executable hlearn-svm-test
+    main-is:            example0003-classification.hs
+    hs-source-dirs:     examples
+
+    ghc-options:
+        -threaded
+        -rtsopts
+
+        -funbox-strict-fields
+        -fexcess-precision
+
+--         -prof -osuf p_o -hisuf p_hi
+
+--        -fllvm
+        -optlo-O3
+        -optlo-enable-fp-mad
+        -optlo-enable-no-infs-fp-math
+        -optlo-enable-no-nans-fp-math
+        -optlo-enable-unsafe-fp-math
+
+--         -ddump-to-file
+--         -ddump-rule-firings
+--         -ddump-rule-rewrites
+--         -ddump-rules
+--         -ddump-simpl
+--         -ddump-simpl-stats
+--         -dppr-debug
+--         -dsuppress-module-prefixes
+--         -dsuppress-uniques
+--         -dsuppress-idinfo
+--         -dsuppress-coercions
+--         -dsuppress-type-applications
+
+--         -ddump-cmm
+
+    build-depends:
+        base           ,
+        HLearn         ,
+        subhask

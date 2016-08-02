@@ -7,4 +7,4 @@ extra-deps:
     , continued-fractions-0.9.1.1
     , converge-0.1.0.1
     ]
-resolver: lts-5.14
+resolver: lts-6.9
